@@ -131,6 +131,62 @@
       const [password, setPassword] = useState('');
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState('');
+      const [gpsBlocked, setGpsBlocked] = useState(false);
+      const [checkingGps, setCheckingGps] = useState(true);
+
+      // GPS-Check beim Mount
+      useEffect(() => {
+        checkGPSAvailability();
+      }, []);
+
+      const checkGPSAvailability = async () => {
+        setCheckingGps(true);
+        try {
+          // Schneller Check mit 2 Sekunden Timeout
+          const position = await new Promise((resolve, reject) => {
+            if (!navigator.geolocation) {
+              reject(new Error('GPS nicht verfügbar'));
+              return;
+            }
+            
+            navigator.geolocation.getCurrentPosition(
+              resolve,
+              reject,
+              {
+                enableHighAccuracy: false,  // Schneller - nutzt WiFi/Cellular statt GPS-Satellit
+                timeout: 2000,              // Nur 2 Sekunden Timeout
+                maximumAge: 60000           // Cache für 60 Sekunden OK
+              }
+            );
+          });
+          
+          // GPS funktioniert!
+          console.log('✅ GPS verfügbar:', position.coords);
+          setGpsBlocked(false);
+          
+        } catch (error) {
+          console.error('❌ GPS-Check Fehler:', error);
+          
+          // GPS blockiert oder Fehler
+          if (error.code === 1) {
+            // PERMISSION_DENIED - Das ist das wichtige!
+            setGpsBlocked(true);
+          } else if (error.code === 2) {
+            // POSITION_UNAVAILABLE - Gerät hat kein GPS, aber Permission OK
+            console.log('⚠️ GPS-Signal schwach, aber Permission OK - Login erlauben');
+            setGpsBlocked(false);
+          } else if (error.code === 3) {
+            // TIMEOUT - Zu langsam, aber Permission OK
+            console.log('⚠️ GPS-Timeout, aber Permission OK - Login erlauben');
+            setGpsBlocked(false);
+          } else {
+            // Unbekannter Fehler - lieber blockieren
+            setGpsBlocked(true);
+          }
+        } finally {
+          setCheckingGps(false);
+        }
+      };
 
       const handleLogin = async (e) => {
         e.preventDefault();
@@ -176,19 +232,78 @@
                 <span className="text-cleazz-green-500">z.</span>
               </h1>
               <p className="text-gray-600 text-lg">Objektleiter</p>
-              <p className="text-xs text-gray-400 mt-2">Version 3.0</p>
+              <p className="text-xs text-gray-400 mt-2">Version 3.2</p>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-xl p-8">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-                Anmelden
-              </h2>
+            {/* GPS wird geprüft */}
+            {checkingGps && (
+              <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cleazz-blue-500 mx-auto mb-4"></div>
+                <p className="text-gray-600">Prüfe GPS-Zugriff...</p>
+              </div>
+            )}
 
-              {error && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                  {error}
+            {/* GPS blockiert - Hilfe anzeigen */}
+            {!checkingGps && gpsBlocked && (
+              <div className="bg-white rounded-2xl shadow-xl p-8">
+                <div className="text-center mb-6">
+                  <div className="text-6xl mb-4">⚠️</div>
+                  <h2 className="text-2xl font-bold text-red-600 mb-2">
+                    GPS-Zugriff blockiert
+                  </h2>
+                  <p className="text-gray-600">
+                    Diese App benötigt GPS-Zugriff für die Zeiterfassung.
+                  </p>
                 </div>
-              )}
+
+                {/* iPhone/Safari Anleitung */}
+                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4">
+                  <h3 className="font-bold text-blue-900 mb-2">📱 iPhone (Safari):</h3>
+                  <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                    <li>Einstellungen öffnen</li>
+                    <li>Nach unten scrollen zu "Safari"</li>
+                    <li>"Standort" antippen</li>
+                    <li>Auf "Fragen" oder "Erlauben" stellen</li>
+                  </ol>
+                </div>
+
+                {/* Android/Chrome Anleitung */}
+                <div className="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
+                  <h3 className="font-bold text-green-900 mb-2">🤖 Android (Chrome):</h3>
+                  <ol className="text-sm text-green-800 space-y-1 list-decimal list-inside">
+                    <li>⋮ Menü (oben rechts) öffnen</li>
+                    <li>"Einstellungen" → "Website-Einstellungen"</li>
+                    <li>"Standort" antippen</li>
+                    <li>Auf "Erlauben" stellen</li>
+                  </ol>
+                </div>
+
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full bg-cleazz-blue-500 hover:bg-cleazz-blue-600 text-white font-semibold py-4 rounded-lg transition flex items-center justify-center gap-2"
+                >
+                  <span>🔄</span>
+                  Nach Aktivierung: Seite neu laden
+                </button>
+
+                <p className="text-xs text-gray-500 text-center mt-4">
+                  Bei Problemen kontaktiere deinen Vorgesetzten.
+                </p>
+              </div>
+            )}
+
+            {/* Normaler Login - nur wenn GPS OK */}
+            {!checkingGps && !gpsBlocked && (
+              <div className="bg-white rounded-2xl shadow-xl p-8">
+                <h2 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+                  Anmelden
+                </h2>
+
+                {error && (
+                  <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                    {error}
+                  </div>
+                )}
 
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
@@ -232,6 +347,7 @@
                 Kein Zugang? Wenden Sie sich an Ihren Administrator.
               </p>
             </div>
+            )}
           </div>
         </div>
       );
